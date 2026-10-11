@@ -404,7 +404,7 @@ describe("sendSimulatorTestEmail", () => {
 
     expect(mockTrackFirstEmailSent).toHaveBeenCalledTimes(1);
     expect(mockTrackFirstEmailSent).toHaveBeenCalledWith(
-      testOwner.id,
+      testOwner.email,
       testOrganization.id,
       { channel: "email", source: "simulator_test" }
     );
@@ -605,7 +605,7 @@ describe("sendWelcomeTestEmail", () => {
 
     expect(mockTrackFirstEmailSent).toHaveBeenCalledTimes(1);
     expect(mockTrackFirstEmailSent).toHaveBeenCalledWith(
-      testOwner.id,
+      testOwner.email,
       testOrganization.id,
       { channel: "email", source: "welcome_test" }
     );

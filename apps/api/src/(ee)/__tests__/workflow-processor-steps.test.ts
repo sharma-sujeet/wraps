@@ -1012,14 +1012,14 @@ describe("handleSendEmail", () => {
     expect(content.Template).toBeUndefined();
   });
 
-  it("passes contactEmail to trackFirstEmailSent", async () => {
+  it("tracks the first email without the recipient's address", async () => {
     setupEmailTest({ contact: { email: "workflow-user@example.com" } });
     await handler(makeSQSEvent(emailJob));
-    expect(mockTrackFirstEmailSent).toHaveBeenCalledWith(
+    expect(mockTrackFirstEmailSent).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(mockTrackFirstEmailSent).mock.calls[0]).toEqual([
       "org-1",
       { channel: "email", source: "workflow" },
-      "workflow-user@example.com"
-    );
+    ]);
   });
 
   // ─────────────────────────────────────────────────────────────────────────

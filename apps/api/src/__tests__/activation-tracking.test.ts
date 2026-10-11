@@ -144,12 +144,12 @@ describe("activation tracking", () => {
 
   it("fires first_email_sent exactly once when the claim is won", async () => {
     queueClaim(true);
+    queueSelectResults([{ email: "owner@example.com" }]);
 
-    await trackFirstEmailSent(
-      "org-1",
-      { channel: "email", source: "workflow" },
-      "contact@example.com"
-    );
+    await trackFirstEmailSent("org-1", {
+      channel: "email",
+      source: "workflow",
+    });
 
     expect(mockCapture).toHaveBeenCalledWith({
       distinctId: "org-1",
@@ -169,7 +169,7 @@ describe("activation tracking", () => {
     expect(mockPlatformPost).toHaveBeenCalledWith("/v1/events/", {
       body: {
         name: "activation.first_email_sent",
-        contactEmail: "contact@example.com",
+        contactEmail: "owner@example.com",
         properties: {
           organization_id: "org-1",
           channel: "email",
@@ -177,6 +177,34 @@ describe("activation tracking", () => {
         },
       },
     });
+  });
+
+  it("emits first_email_sent to nobody when the org has no owner", async () => {
+    queueClaim(true);
+    queueSelectResults([]);
+
+    await trackFirstEmailSent("org-1", {
+      channel: "email",
+      source: "broadcast",
+    });
+
+    expect(mockCapture).toHaveBeenCalledTimes(1);
+    expect(mockPlatformPost).not.toHaveBeenCalled();
+  });
+
+  it("never emits first_email_sent to a recipient address", async () => {
+    queueClaim(true);
+    queueSelectResults([{ email: "owner@example.com" }]);
+
+    await trackFirstEmailSent("org-1", {
+      channel: "email",
+      source: "workflow",
+    });
+
+    expect(mockPlatformPost).toHaveBeenCalledTimes(1);
+    expect(mockPlatformPost.mock.calls[0][1].body.contactEmail).toBe(
+      "owner@example.com"
+    );
   });
 
   it("does not re-fire first_email_sent once the org is already tracked", async () => {

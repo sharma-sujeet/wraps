@@ -450,7 +450,7 @@ export const inviteMember = orgAction(
       // Continue even if email fails - the invitation is still created
     }
 
-    await trackTeammateInvited(ctx.access.userId, organizationId, {
+    await trackTeammateInvited(ctx.access.userEmail, organizationId, {
       invitedEmail: email,
       role,
     });

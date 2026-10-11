@@ -757,11 +757,10 @@ export async function handleSendEmail(
   }
 
   // Track first email sent (must await in Lambda)
-  await trackFirstEmailSent(
-    organizationId,
-    { channel: "email", source: "workflow" },
-    contactRecord.email
-  );
+  await trackFirstEmailSent(organizationId, {
+    channel: "email",
+    source: "workflow",
+  });
 
   // Update contact email metrics
   await db

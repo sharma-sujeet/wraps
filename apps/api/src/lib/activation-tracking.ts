@@ -81,8 +81,7 @@ async function claimFirstEmailTracked(
  */
 export async function trackFirstEmailSent(
   organizationId: string,
-  properties: { channel: string; source: string },
-  contactEmail?: string
+  properties: { channel: string; source: string }
 ) {
   try {
     // Fire exactly once per org. The atomic claim replaces the old
@@ -113,9 +112,11 @@ export async function trackFirstEmailSent(
       },
     });
 
-    // Also emit to Wraps platform for workflow triggers
-    if (contactEmail) {
-      await emit(contactEmail, "activation.first_email_sent", props);
+    // Emit to the Wraps platform as the org owner — never the recipient of
+    // the customer's email, who is not a Wraps contact.
+    const ownerEmail = await getOrgOwnerEmail(organizationId);
+    if (ownerEmail) {
+      await emit(ownerEmail, "activation.first_email_sent", props);
     }
   } catch (error) {
     // never throw from tracking

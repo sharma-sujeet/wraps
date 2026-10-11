@@ -366,7 +366,7 @@ export const sendSimulatorTestEmail = orgAction(
         ],
       });
 
-      await trackFirstEmailSent(ctx.access.userId, organizationId, {
+      await trackFirstEmailSent(ctx.access.userEmail, organizationId, {
         channel: "email",
         source: "simulator_test",
       });
@@ -467,7 +467,7 @@ export const sendWelcomeTestEmail = orgAction(
         ],
       });
 
-      await trackFirstEmailSent(ctx.access.userId, organizationId, {
+      await trackFirstEmailSent(ctx.access.userEmail, organizationId, {
         channel: "email",
         source: "welcome_test",
       });
