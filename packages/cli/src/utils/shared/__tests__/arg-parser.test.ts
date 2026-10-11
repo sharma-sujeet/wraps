@@ -224,3 +224,20 @@ describe("parseCliArgs — values given to valueless boolean flags", () => {
     expect(sub).toEqual(["email", "inbound", "add"]);
   });
 });
+
+describe("parseCliArgs — workflows push slug", () => {
+  it("keeps the slug at sub[3] alongside boolean flags", () => {
+    const { flags, sub, extraPositionals } = parseCliArgs([
+      "node",
+      "wraps",
+      "email",
+      "workflows",
+      "push",
+      "onboarding",
+      "--dry-run",
+    ]);
+    expect(sub).toEqual(["email", "workflows", "push", "onboarding"]);
+    expect(flags.dryRun).toBe(true);
+    expect(extraPositionals).toEqual([]);
+  });
+});

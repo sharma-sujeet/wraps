@@ -1167,14 +1167,18 @@ async function run() {
 
             case "validate":
               await workflowsValidate({
-                workflow: flags.workflow,
+                // Positional slug (`wraps email workflows validate my-slug`)
+                // falls back to --workflow, matching templates push.
+                workflow: sub[3] || flags.workflow,
                 json: flags.json,
               });
               break;
 
             case "push":
               await workflowsPush({
-                workflow: flags.workflow,
+                // Positional slug (`wraps email workflows push my-slug`)
+                // falls back to --workflow, matching templates push.
+                workflow: sub[3] || flags.workflow,
                 dryRun: flags.dryRun,
                 draft: flags.draft,
                 force: flags.force,

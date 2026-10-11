@@ -4,10 +4,10 @@
  * Parses workflow TypeScript files and pushes them to the Wraps platform.
  *
  * Usage:
- *   wraps email workflows push [options]
+ *   wraps email workflows push [slug] [options]
  *
  * Options:
- *   --workflow <name>  Push specific workflow
+ *   --workflow <name>  Push specific workflow (same as the [slug] positional)
  *   --dry-run          Preview changes without pushing
  *   --draft            Push as draft without enabling the workflow
  *   --force            Force push even if edited on dashboard

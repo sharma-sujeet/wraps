@@ -4,10 +4,10 @@
  * Validates workflow TypeScript files in wraps/workflows/ directory.
  *
  * Usage:
- *   wraps email workflows validate [options]
+ *   wraps email workflows validate [slug] [options]
  *
  * Options:
- *   --workflow <name>  Validate specific workflow
+ *   --workflow <name>  Validate specific workflow (same as the [slug] positional)
  *   --json             Output as JSON
  */
 
