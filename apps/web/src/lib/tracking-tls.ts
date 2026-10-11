@@ -11,6 +11,7 @@
 
 import { lookup as dnsLookup } from "node:dns/promises";
 import * as tls from "node:tls";
+import { blockedIpLabel } from "@/lib/blocked-ip";
 
 export type TrackingTlsResult =
   | { status: "serving" }
@@ -19,67 +20,6 @@ export type TrackingTlsResult =
 
 const TRACKING_TLS_PORT = 443;
 const TRACKING_TLS_TIMEOUT_MS = 5000;
-
-/**
- * IP classification mirrored from `isBlockedIp` in
- * `apps/api/src/(ee)/workers/workflow-utils.ts`. Duplicated rather than
- * imported: that file lives in a different package (`apps/api`, not
- * `apps/web`), under an `(ee)` directory this app cannot reach, and plan 302
- * is explicit that the api module is not to be refactored to share code —
- * this is a smaller, deliberately duplicated change instead. Same pattern as
- * `isAccessDeniedError` in `apps/web/src/actions/domains.ts`.
- */
-const BLOCKED_IPV4_RANGES = [
-  { prefix: "127.", label: "loopback" },
-  { prefix: "10.", label: "private (10/8)" },
-  { prefix: "169.254.", label: "link-local/IMDS" },
-  { prefix: "0.", label: "unspecified" },
-] as const;
-
-function isBlockedIp(ip: string): string | null {
-  // IPv4-mapped IPv6 (::ffff:1.2.3.4) — extract the IPv4 and re-check.
-  if (ip.startsWith("::ffff:")) {
-    const v4 = ip.slice(7);
-    if (v4.includes(".")) {
-      return isBlockedIp(v4);
-    }
-  }
-
-  for (const range of BLOCKED_IPV4_RANGES) {
-    if (ip.startsWith(range.prefix)) {
-      return range.label;
-    }
-  }
-  // 100.64.0.0/10 (Carrier-grade NAT / AWS VPC)
-  if (ip.startsWith("100.")) {
-    const second = Number.parseInt(ip.split(".")[1], 10);
-    if (second >= 64 && second <= 127) {
-      return "private (100.64/10 CGN)";
-    }
-  }
-  // 172.16.0.0/12
-  if (ip.startsWith("172.")) {
-    const second = Number.parseInt(ip.split(".")[1], 10);
-    if (second >= 16 && second <= 31) {
-      return "private (172.16/12)";
-    }
-  }
-  // 192.168.0.0/16
-  if (ip.startsWith("192.168.")) {
-    return "private (192.168/16)";
-  }
-  // IPv6
-  if (ip === "::1" || ip === "::") {
-    return "loopback";
-  }
-  if (ip.startsWith("fe80:")) {
-    return "link-local";
-  }
-  if (ip.startsWith("fd") || ip.startsWith("fc")) {
-    return "private (ULA)";
-  }
-  return null;
-}
 
 /**
  * Opens a TLS handshake against `address` (the DNS-resolved, SSRF-checked
@@ -134,8 +74,8 @@ function connectTls(host: string, address: string): Promise<TrackingTlsResult> {
 
 /**
  * Resolves `host`, rejects the probe (as `unknown`, opening no connection)
- * if any resolved address is a loopback, link-local, private, or IPv6-ULA
- * address, and otherwise opens a TLS handshake to confirm whether the host
+ * if any resolved address is private, loopback, link-local, reserved or multicast (see `@/lib/blocked-ip`),
+ * and otherwise opens a TLS handshake to confirm whether the host
  * is actually served over valid HTTPS.
  *
  * Never throws — the contract is that this always resolves to one of the
@@ -164,7 +104,7 @@ export async function probeTrackingTls(
   }
 
   for (const { address } of addresses) {
-    const blocked = isBlockedIp(address);
+    const blocked = blockedIpLabel(address);
     if (blocked) {
       return {
         status: "unknown",

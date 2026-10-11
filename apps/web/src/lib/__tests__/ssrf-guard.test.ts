@@ -262,6 +262,21 @@ describe("isPrivateHost — IPv6 literals and extra ranges", () => {
     expect(isPrivateHost("::")).toBe(true);
   });
 
+  it("blocks IPv4-compatible IPv6 (::/96), which BlockList does not match against IPv4 ranges", () => {
+    expect(isPrivateHost("::127.0.0.1")).toBe(true);
+    expect(isPrivateHost("[::a9fe:a9fe]")).toBe(true);
+  });
+
+  it("blocks benchmarking, IETF and NAT64 ranges", () => {
+    expect(isPrivateHost("198.18.0.1")).toBe(true);
+    expect(isPrivateHost("192.0.0.1")).toBe(true);
+    expect(isPrivateHost("64:ff9b::a9fe:a9fe")).toBe(true);
+  });
+
+  it("still allows public IPv6", () => {
+    expect(isPrivateHost("2606:4700::1111")).toBe(false);
+  });
+
   it("leaves hostnames to DNS resolution", () => {
     expect(isPrivateHost("10.example.com")).toBe(false);
   });
@@ -276,6 +291,12 @@ describe("validatePublicUrl — IPv6 literal bypass is closed", () => {
     expect(
       validatePublicUrl("http://[::ffff:169.254.169.254]/latest/meta-data/")
         .valid
+    ).toBe(false);
+  });
+
+  it("rejects an IPv4-compatible IMDS literal", () => {
+    expect(
+      validatePublicUrl("http://[::a9fe:a9fe]/latest/meta-data/").valid
     ).toBe(false);
   });
 });

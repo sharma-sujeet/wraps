@@ -11,39 +11,13 @@ import {
   type LookupOptions,
 } from "node:dns";
 import { lookup } from "node:dns/promises";
-import { BlockList, isIP } from "node:net";
+import { isIP } from "node:net";
 import {
   Agent,
   type RequestInit as UndiciRequestInit,
   fetch as undiciFetch,
 } from "undici";
-
-const BLOCKED_RANGES = new BlockList();
-for (const [network, prefix] of [
-  ["0.0.0.0", 8],
-  ["10.0.0.0", 8],
-  ["100.64.0.0", 10], // CGNAT — used inside AWS
-  ["127.0.0.0", 8],
-  ["169.254.0.0", 16], // link-local / AWS EC2 metadata
-  ["172.16.0.0", 12],
-  ["192.0.0.0", 24],
-  ["192.168.0.0", 16],
-  ["198.18.0.0", 15],
-  ["224.0.0.0", 4], // multicast
-  ["240.0.0.0", 4], // reserved + broadcast
-] as const) {
-  BLOCKED_RANGES.addSubnet(network, prefix, "ipv4");
-}
-for (const [network, prefix] of [
-  ["::", 128],
-  ["::1", 128],
-  ["64:ff9b::", 96], // NAT64
-  ["fc00::", 7], // ULA
-  ["fe80::", 10], // link-local
-  ["ff00::", 8], // multicast
-] as const) {
-  BLOCKED_RANGES.addSubnet(network, prefix, "ipv6");
-}
+import { blockedIpLabel } from "@/lib/blocked-ip";
 
 const BLOCKED_HOSTNAMES = new Set(["localhost", "metadata.google.internal"]);
 
@@ -52,14 +26,11 @@ export function isPrivateHost(hostname: string): boolean {
   if (BLOCKED_HOSTNAMES.has(lower)) {
     return true;
   }
-  const family = isIP(lower);
-  if (family === 4) {
-    return BLOCKED_RANGES.check(lower, "ipv4");
+  // Hostnames are left to DNS resolution (assertPublicUrl, ssrfSafeLookup).
+  if (isIP(lower) === 0) {
+    return false;
   }
-  if (family === 6) {
-    return BLOCKED_RANGES.check(lower, "ipv6");
-  }
-  return false;
+  return blockedIpLabel(lower) !== null;
 }
 
 export type UrlValidationResult =

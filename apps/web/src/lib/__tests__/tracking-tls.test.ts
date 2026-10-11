@@ -100,6 +100,27 @@ describe("SSRF guard — blocked addresses never reach tls.connect", () => {
     expect(mockConnect).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ["224.0.0.1", 4, "multicast"],
+    ["198.18.0.1", 4, "benchmarking (198.18/15)"],
+    ["::ffff:7f00:1", 6, "loopback"],
+    ["::a9fe:a9fe", 6, "IPv4-compatible (deprecated)"],
+    ["64:ff9b::a9fe:a9fe", 6, "NAT64"],
+  ])(
+    "resolves to unknown for %s, without connecting",
+    async (address, family, label) => {
+      mockLookup.mockResolvedValue([{ address, family }]);
+
+      const result = await probeTrackingTls("evil.example.com");
+
+      expect(result).toEqual({
+        status: "unknown",
+        reason: `Resolved address is not eligible to probe (${label}): ${address}`,
+      });
+      expect(mockConnect).not.toHaveBeenCalled();
+    }
+  );
+
   it("blocks on ANY blocked address among several resolved — not just the first", async () => {
     mockLookup.mockResolvedValue([
       { address: "8.8.8.8", family: 4 },
