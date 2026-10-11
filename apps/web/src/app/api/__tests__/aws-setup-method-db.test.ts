@@ -1,5 +1,5 @@
 /**
- * `setupMethod` persistence on the three route insert sites (real DB).
+ * `setupMethod` persistence on the two route insert sites (real DB).
  *
  * Plan 284: each of the account-creation flows records how the account was
  * connected, so the installed base becomes queryable. This file is the
@@ -85,7 +85,6 @@ vi.mock("@aws-sdk/client-sesv2", () => ({
 
 const INFRA_ACCOUNT_ID = "555566667001";
 const VALIDATE_ACCOUNT_ID = "555566667002";
-const ONBOARDING_ACCOUNT_ID = "555566667003";
 
 function roleArnFor(accountId: string) {
   return `arn:aws:iam::${accountId}:role/wraps-console-access-role`;
@@ -158,54 +157,5 @@ describe("setupMethod persistence — real DB", () => {
       .where(eq(awsAccount.accountId, VALIDATE_ACCOUNT_ID));
 
     expect(row?.setupMethod).toBe("cfn_console_role");
-  });
-
-  it("onboarding/aws/validate persists setupMethod: onboarding_wizard", async () => {
-    const { POST } = await import("../[orgSlug]/onboarding/aws/validate/route");
-
-    const response = await POST(
-      buildRequest({
-        roleArn: roleArnFor(ONBOARDING_ACCOUNT_ID),
-        externalId: EXTERNAL_ID,
-        region: "us-east-1",
-      }),
-      context
-    );
-
-    expect(response.status).toBe(200);
-
-    const [row] = await db
-      .select({ setupMethod: awsAccount.setupMethod })
-      .from(awsAccount)
-      .where(eq(awsAccount.accountId, ONBOARDING_ACCOUNT_ID));
-
-    expect(row?.setupMethod).toBe("onboarding_wizard");
-  });
-
-  it("onboarding/aws/validate keeps a custom account name on an existing account", async () => {
-    const { POST } = await import("../[orgSlug]/onboarding/aws/validate/route");
-    const body = {
-      roleArn: roleArnFor(ONBOARDING_ACCOUNT_ID),
-      externalId: EXTERNAL_ID,
-      region: "us-east-1",
-    };
-
-    const first = await POST(buildRequest(body), context);
-    expect(first.status).toBe(200);
-
-    await db
-      .update(awsAccount)
-      .set({ name: "production" })
-      .where(eq(awsAccount.accountId, ONBOARDING_ACCOUNT_ID));
-
-    const second = await POST(buildRequest(body), context);
-    expect(second.status).toBe(200);
-
-    const [row] = await db
-      .select({ name: awsAccount.name })
-      .from(awsAccount)
-      .where(eq(awsAccount.accountId, ONBOARDING_ACCOUNT_ID));
-
-    expect(row?.name).toBe("production");
   });
 });

@@ -45,7 +45,6 @@ const GATED_ROUTE_FILES = [
   "(ee)/workflows/ai/generate/route.ts",
   "aws/validate/route.ts",
   "aws/validate-infrastructure/route.ts",
-  "onboarding/aws/validate/route.ts",
   "onboarding/complete/route.ts",
   "onboarding/verify-cli/route.ts",
 ];

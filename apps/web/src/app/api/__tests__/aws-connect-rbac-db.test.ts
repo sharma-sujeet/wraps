@@ -1,7 +1,7 @@
 /**
  * AWS connection routes — write RBAC.
  *
- * The three POSTs below create/update `awsAccount` rows (roleArn, externalId,
+ * The two POSTs below create/update `awsAccount` rows (roleArn, externalId,
  * webhookSecret, isVerified). An `awsAccount` row is a live sending identity:
  * apps/api resolves it to a roleArn/externalId and assume-roles into it to
  * send mail. So a role that cannot write must not be able to attach one.
@@ -114,16 +114,6 @@ const ROUTES = [
   {
     name: "aws/validate",
     load: () => import("../[orgSlug]/aws/validate/route").then((m) => m.POST),
-    body: {
-      roleArn: ATTACKER_ROLE_ARN,
-      externalId: ATTACKER_EXTERNAL_ID,
-      region: "us-east-1",
-    },
-  },
-  {
-    name: "onboarding/aws/validate",
-    load: () =>
-      import("../[orgSlug]/onboarding/aws/validate/route").then((m) => m.POST),
     body: {
       roleArn: ATTACKER_ROLE_ARN,
       externalId: ATTACKER_EXTERNAL_ID,
