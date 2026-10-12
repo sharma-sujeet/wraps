@@ -53,6 +53,9 @@ export const organizationExtension = pgTable("organization_extension", {
   defaultReplyTo: text("default_reply_to"), // e.g., "support@example.com"
   defaultSenderId: text("default_sender_id"), // SMS: phone number or alphanumeric ID
 
+  // SES webhook secret carried by every CloudFormation quick-create link for
+  // this org. Stable so a page reload rebuilds the link already launched.
+  cfnWebhookSecret: text("cfn_webhook_secret"),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 

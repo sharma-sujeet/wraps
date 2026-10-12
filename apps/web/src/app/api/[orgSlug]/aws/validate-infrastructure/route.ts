@@ -1,4 +1,3 @@
-import { randomBytes } from "node:crypto";
 import { auth } from "@wraps/auth";
 import { applyStackEmailFeatures, db, writeIdentitySnapshot } from "@wraps/db";
 import { awsAccount } from "@wraps/db/schema/app";
@@ -12,6 +11,7 @@ import {
   type AssumeRoleErrorCode,
   assumeRole,
 } from "@/lib/aws/assume-role";
+import { getOrCreateCfnWebhookSecret } from "@/lib/aws/cfn-webhook-secret";
 import {
   detectFeaturesFromOutputs,
   findInfrastructureStack,
@@ -163,9 +163,19 @@ export async function POST(request: Request, context: RouteContext) {
           ),
       });
 
-      // Use the client-provided webhook secret (from CloudFormation URL) or generate a secure random one
+      // The stack's ExternalId output is its stack ID. Same stack: keep the
+      // stored secret, because that is the one the stack holds. A new stack
+      // came from a quick-create link, which carries the org's CloudFormation
+      // webhook secret. Only dashboard bundles from before plan 407 still send
+      // `clientWebhookSecret`; honour it so their in-flight stacks keep working.
+      const storedSecret =
+        existingAccount?.externalId === externalId
+          ? existingAccount?.webhookSecret
+          : null;
       const webhookSecret =
-        clientWebhookSecret || randomBytes(32).toString("hex");
+        storedSecret ||
+        clientWebhookSecret ||
+        (await getOrCreateCfnWebhookSecret(orgWithMembership.id));
 
       let created: { id: string } | undefined;
 
@@ -177,7 +187,8 @@ export async function POST(request: Request, context: RouteContext) {
           .set({
             roleArn,
             region,
-            // Update external ID and webhook secret in case they changed
+            // externalId changes when a new stack was launched; the secret
+            // is resolved above and only changes in that case
             externalId,
             webhookSecret,
             isVerified: true,

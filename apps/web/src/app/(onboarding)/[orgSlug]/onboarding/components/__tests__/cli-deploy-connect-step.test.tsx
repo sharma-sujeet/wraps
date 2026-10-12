@@ -55,6 +55,13 @@ vi.mock("lucide-react", () => ({
   TerminalIcon: () => <svg data-testid="terminal-icon" />,
 }));
 
+vi.mock("@/actions/aws-accounts", () => ({
+  getCloudFormationWebhookSecretAction: vi.fn(async () => ({
+    success: true,
+    webhookSecret: "f".repeat(64),
+  })),
+}));
+
 const mockOpen = vi.fn();
 const mockFetch = vi.fn();
 vi.stubGlobal("open", mockOpen);
@@ -103,6 +110,18 @@ const defaultProps = {
 
 function capturesOf(event: string) {
   return mockCapture.mock.calls.filter(([name]) => name === event);
+}
+
+/**
+ * The deploy button stays disabled until the server-issued webhook secret has
+ * loaded, so wait for it before clicking.
+ */
+async function deployWithCloudFormation() {
+  const deployButton = screen.getByRole("button", {
+    name: /deploy with cloudformation/i,
+  });
+  await waitFor(() => expect(deployButton).toBeEnabled());
+  fireEvent.click(deployButton);
 }
 
 describe("CliDeployConnectStep — three-path layout", () => {
@@ -373,7 +392,7 @@ describe("CliDeployConnectStep — three-path layout", () => {
     expect(capturesOf("onboarding_deployment_started")).toHaveLength(0);
   });
 
-  it("reports the CloudFormation start before opening the console", () => {
+  it("reports the CloudFormation start before opening the console", async () => {
     renderWithQueryClient(
       <CliDeployConnectStep {...defaultProps} selfHosted={false} />
     );
@@ -383,9 +402,7 @@ describe("CliDeployConnectStep — three-path layout", () => {
     ).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /use the browser/i }));
-    fireEvent.click(
-      screen.getByRole("button", { name: /deploy with cloudformation/i })
-    );
+    await deployWithCloudFormation();
 
     expect(mockCapture).toHaveBeenCalledWith("onboarding_deployment_started", {
       step: 4,
@@ -406,15 +423,13 @@ describe("CliDeployConnectStep — three-path layout", () => {
     );
   });
 
-  it("omits param_Domain and param_MailFromSubdomain when no domain is entered", () => {
+  it("omits param_Domain and param_MailFromSubdomain when no domain is entered", async () => {
     renderWithQueryClient(
       <CliDeployConnectStep {...defaultProps} selfHosted={false} />
     );
 
     fireEvent.click(screen.getByRole("button", { name: /use the browser/i }));
-    fireEvent.click(
-      screen.getByRole("button", { name: /deploy with cloudformation/i })
-    );
+    await deployWithCloudFormation();
 
     const params = new URL(mockOpen.mock.calls[0][0].replace("#/", ""))
       .searchParams;
@@ -424,7 +439,7 @@ describe("CliDeployConnectStep — three-path layout", () => {
     expect(params.get(WEBHOOK_SECRET_PARAM)).toBeTruthy();
   });
 
-  it("omits param_Domain and param_MailFromSubdomain for a whitespace-only domain", () => {
+  it("omits param_Domain and param_MailFromSubdomain for a whitespace-only domain", async () => {
     renderWithQueryClient(
       <CliDeployConnectStep {...defaultProps} selfHosted={false} />
     );
@@ -433,9 +448,7 @@ describe("CliDeployConnectStep — three-path layout", () => {
     fireEvent.change(screen.getByLabelText(/sending domain/i), {
       target: { value: "   " },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: /deploy with cloudformation/i })
-    );
+    await deployWithCloudFormation();
 
     const params = new URL(mockOpen.mock.calls[0][0].replace("#/", ""))
       .searchParams;
@@ -443,7 +456,7 @@ describe("CliDeployConnectStep — three-path layout", () => {
     expect(params.has("param_MailFromSubdomain")).toBe(false);
   });
 
-  it("includes param_Domain and param_MailFromSubdomain when a domain is entered", () => {
+  it("includes param_Domain and param_MailFromSubdomain when a domain is entered", async () => {
     renderWithQueryClient(
       <CliDeployConnectStep {...defaultProps} selfHosted={false} />
     );
@@ -452,9 +465,7 @@ describe("CliDeployConnectStep — three-path layout", () => {
     fireEvent.change(screen.getByLabelText(/sending domain/i), {
       target: { value: "example.com" },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: /deploy with cloudformation/i })
-    );
+    await deployWithCloudFormation();
 
     const params = new URL(mockOpen.mock.calls[0][0].replace("#/", ""))
       .searchParams;
@@ -462,7 +473,7 @@ describe("CliDeployConnectStep — three-path layout", () => {
     expect(params.get("param_MailFromSubdomain")).toBe("mail");
   });
 
-  it("trims surrounding whitespace from the entered domain", () => {
+  it("trims surrounding whitespace from the entered domain", async () => {
     renderWithQueryClient(
       <CliDeployConnectStep {...defaultProps} selfHosted={false} />
     );
@@ -471,30 +482,26 @@ describe("CliDeployConnectStep — three-path layout", () => {
     fireEvent.change(screen.getByLabelText(/sending domain/i), {
       target: { value: "  example.com  " },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: /deploy with cloudformation/i })
-    );
+    await deployWithCloudFormation();
 
     const params = new URL(mockOpen.mock.calls[0][0].replace("#/", ""))
       .searchParams;
     expect(params.get("param_Domain")).toBe("example.com");
   });
 
-  it("validates the same webhook secret it deployed", async () => {
+  it("deploys the server-issued webhook secret and leaves it to the server on validate", async () => {
     mockFetch.mockResolvedValue({ ok: true, json: async () => ({}) });
     renderWithQueryClient(
       <CliDeployConnectStep {...defaultProps} selfHosted={false} />
     );
 
     fireEvent.click(screen.getByRole("button", { name: /use the browser/i }));
-    fireEvent.click(
-      screen.getByRole("button", { name: /deploy with cloudformation/i })
-    );
+    await deployWithCloudFormation();
 
     const openedSecret = new URL(
       mockOpen.mock.calls[0][0].replace("#/", "")
     ).searchParams.get("param_WrapsWebhookSecret");
-    expect(openedSecret).toBeTruthy();
+    expect(openedSecret).toBe("f".repeat(64));
 
     fireEvent.change(screen.getByLabelText("Console Role ARN"), {
       target: {
@@ -512,7 +519,32 @@ describe("CliDeployConnectStep — three-path layout", () => {
       expect(mockFetch).toHaveBeenCalled();
     });
     const posted = JSON.parse(String(mockFetch.mock.calls.at(-1)?.[1]?.body));
-    expect(posted.webhookSecret).toBe(openedSecret);
+    expect(posted).not.toHaveProperty("webhookSecret");
+  });
+
+  it("builds the same link after a remount", async () => {
+    const readOpenedSecret = (call: number) =>
+      new URL(mockOpen.mock.calls[call][0].replace("#/", "")).searchParams.get(
+        WEBHOOK_SECRET_PARAM
+      );
+
+    const { unmount } = renderWithQueryClient(
+      <CliDeployConnectStep {...defaultProps} selfHosted={false} />
+    );
+    fireEvent.click(screen.getByRole("button", { name: /use the browser/i }));
+    await deployWithCloudFormation();
+    const firstSecret = readOpenedSecret(0);
+    unmount();
+
+    renderWithQueryClient(
+      <CliDeployConnectStep {...defaultProps} selfHosted={false} />
+    );
+    fireEvent.click(screen.getByRole("button", { name: /use the browser/i }));
+    await deployWithCloudFormation();
+    const secondSecret = readOpenedSecret(1);
+
+    expect(firstSecret).toBeTruthy();
+    expect(secondSecret).toBe(firstSecret);
   });
 
   /**
@@ -526,15 +558,13 @@ describe("CliDeployConnectStep — three-path layout", () => {
    * the way the primary deploy control already does, so the secret never
    * becomes markup.
    */
-  it("never renders the webhook secret as a DOM attribute", () => {
+  it("never renders the webhook secret as a DOM attribute", async () => {
     renderWithQueryClient(
       <CliDeployConnectStep {...defaultProps} selfHosted={false} />
     );
 
     fireEvent.click(screen.getByRole("button", { name: /use the browser/i }));
-    fireEvent.click(
-      screen.getByRole("button", { name: /deploy with cloudformation/i })
-    );
+    await deployWithCloudFormation();
 
     const openedSecret = new URL(
       mockOpen.mock.calls[0][0].replace("#/", "")
@@ -552,15 +582,13 @@ describe("CliDeployConnectStep — three-path layout", () => {
     expect(renderedMarkup()).not.toContain(openedSecret);
   });
 
-  it("opens the CloudFormation console from script, not from an href", () => {
+  it("opens the CloudFormation console from script, not from an href", async () => {
     renderWithQueryClient(
       <CliDeployConnectStep {...defaultProps} selfHosted={false} />
     );
 
     fireEvent.click(screen.getByRole("button", { name: /use the browser/i }));
-    fireEvent.click(
-      screen.getByRole("button", { name: /deploy with cloudformation/i })
-    );
+    await deployWithCloudFormation();
 
     const deployedUrl = mockOpen.mock.calls[0][0];
     mockOpen.mockClear();
@@ -599,9 +627,7 @@ describe("CliDeployConnectStep — three-path layout", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: /use the browser/i }));
-    fireEvent.click(
-      screen.getByRole("button", { name: /deploy with cloudformation/i })
-    );
+    await deployWithCloudFormation();
     fireEvent.change(screen.getByLabelText("Console Role ARN"), {
       target: {
         value: "arn:aws:iam::123456789012:role/wraps-console-access-role",
@@ -657,9 +683,7 @@ describe("CliDeployConnectStep — three-path layout", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: /use the browser/i }));
-    fireEvent.click(
-      screen.getByRole("button", { name: /deploy with cloudformation/i })
-    );
+    await deployWithCloudFormation();
     fireEvent.change(screen.getByLabelText("Console Role ARN"), {
       target: {
         value: "arn:aws:iam::123456789012:role/wraps-console-access-role",
@@ -963,15 +987,13 @@ describe("CliDeployConnectStep — three-path layout", () => {
     }
   });
 
-  it("closes the other paths once a stack is launching", () => {
+  it("closes the other paths once a stack is launching", async () => {
     renderWithQueryClient(
       <CliDeployConnectStep {...defaultProps} selfHosted={false} />
     );
 
     fireEvent.click(screen.getByRole("button", { name: /use the browser/i }));
-    fireEvent.click(
-      screen.getByRole("button", { name: /deploy with cloudformation/i })
-    );
+    await deployWithCloudFormation();
 
     expect(
       screen.queryByRole("button", { name: /use the cli/i })

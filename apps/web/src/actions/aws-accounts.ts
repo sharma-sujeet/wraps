@@ -41,6 +41,7 @@ import {
   getCredentials,
   isCustomerRoleAccessError,
 } from "@/lib/aws/assume-role";
+import { getOrCreateCfnWebhookSecret } from "@/lib/aws/cfn-webhook-secret";
 import { getOrAssumeRole } from "@/lib/aws/credential-cache";
 import { findWrapsArchive } from "@/lib/aws/mailmanager";
 import { renameAwsAccountSchema } from "@/lib/forms/aws-account";
@@ -154,6 +155,28 @@ export const listAWSAccounts = orgAction(
       })),
     };
   }
+);
+
+/**
+ * The webhook secret for this org's CloudFormation quick-create links. Write
+ * permission, because whoever holds it can post SES events for the org's
+ * CloudFormation-connected accounts.
+ */
+export const getCloudFormationWebhookSecretAction = orgAction(
+  {
+    name: "getCloudFormationWebhookSecret",
+    resource: "awsAccounts",
+    permission: ["write"],
+    orgId: (organizationId: string) => organizationId,
+    onError: "Failed to prepare the CloudFormation link",
+  },
+  async (
+    ctx,
+    _organizationId: string
+  ): Promise<{ success: true; webhookSecret: string }> => ({
+    success: true,
+    webhookSecret: await getOrCreateCfnWebhookSecret(ctx.organizationId),
+  })
 );
 
 export const connectAWSAccountAction = orgAction(

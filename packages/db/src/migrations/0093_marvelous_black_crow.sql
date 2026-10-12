@@ -1,0 +1,1 @@
+ALTER TABLE "organization_extension" ADD COLUMN "cfn_webhook_secret" text;

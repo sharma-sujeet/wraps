@@ -1,5 +1,6 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@wraps/ui/components/ui/badge";
 import {
   Card,
@@ -47,6 +48,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import {
+  getCloudFormationWebhookSecretAction,
   saveWebhookSecretAction,
   scanAWSAccountFeatures,
 } from "@/actions/aws-accounts";
@@ -933,12 +935,6 @@ export function generateQuickCreateUrl(
   return `https://console.aws.amazon.com/cloudformation/home#/stacks/create/review?${params.toString()}`;
 }
 
-function generateSecureWebhookSecret(): string {
-  const array = new Uint8Array(32);
-  crypto.getRandomValues(array);
-  return Array.from(array, (b) => b.toString(16).padStart(2, "0")).join("");
-}
-
 function CliCommandGuide({
   description,
   command,
@@ -994,9 +990,25 @@ function DeployConnectGuide({ organizationId }: { organizationId: string }) {
   const [validationError, setValidationError] = useState<string | null>(null);
   const [sendingDomain, setSendingDomain] = useState("");
 
-  const [webhookSecret] = useState(() => generateSecureWebhookSecret());
+  // One secret per org, issued by the server, so a reload rebuilds the same
+  // link the customer may already have launched.
+  const cfnSecretQuery = useQuery({
+    queryKey: ["cfn-webhook-secret", organizationId],
+    queryFn: async () => {
+      const result = await getCloudFormationWebhookSecretAction(organizationId);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.webhookSecret;
+    },
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+  const webhookSecret = cfnSecretQuery.data;
   const quickCreateUrl = useMemo(
-    () => generateQuickCreateUrl(organizationId, webhookSecret, sendingDomain),
+    () =>
+      webhookSecret
+        ? generateQuickCreateUrl(organizationId, webhookSecret, sendingDomain)
+        : null,
     [organizationId, webhookSecret, sendingDomain]
   );
 
@@ -1029,6 +1041,9 @@ function DeployConnectGuide({ organizationId }: { organizationId: string }) {
   };
 
   const handleCloudFormationDeploy = () => {
+    if (!quickCreateUrl) {
+      return;
+    }
     window.open(quickCreateUrl, "_blank", "noopener,noreferrer");
     setCfnDeployed(true);
   };
@@ -1042,7 +1057,7 @@ function DeployConnectGuide({ organizationId }: { organizationId: string }) {
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ roleArn, externalId, webhookSecret }),
+            body: JSON.stringify({ roleArn, externalId }),
           }
         );
         if (!response.ok) {
@@ -1274,6 +1289,8 @@ function DeployConnectGuide({ organizationId }: { organizationId: string }) {
               </div>
               <Button
                 className="w-full"
+                disabled={!quickCreateUrl}
+                loading={cfnSecretQuery.isPending}
                 onClick={handleCloudFormationDeploy}
                 size="sm"
               >

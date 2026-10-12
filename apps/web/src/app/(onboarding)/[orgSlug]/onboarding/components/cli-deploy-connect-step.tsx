@@ -1,7 +1,7 @@
 "use client";
 
 import { useForm } from "@tanstack/react-form";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Card,
   CardContent,
@@ -25,6 +25,7 @@ import posthog from "posthog-js";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import z from "zod";
+import { getCloudFormationWebhookSecretAction } from "@/actions/aws-accounts";
 import { SelfhostConnectInstructions } from "@/components/selfhost-connect-instructions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -116,15 +117,6 @@ Full Wraps docs (agent-readable): https://wraps.dev/llms-full.txt`;
 }
 
 /**
- * Generate a cryptographically secure webhook secret
- */
-function generateSecureWebhookSecret(): string {
-  const array = new Uint8Array(32);
-  crypto.getRandomValues(array);
-  return Array.from(array, (b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-/**
  * Generate CloudFormation Quick Create URL for the hosted platform. Only called
  * when `selfHosted` is false — the S3-hosted template grants assume-role to the
  * Wraps platform account and posts events to api.wraps.dev, neither of which a
@@ -198,13 +190,26 @@ export function CliDeployConnectStep({
     [orgName, selfHosted]
   );
 
-  // Generate a cryptographically secure webhook secret once on mount
-  const [webhookSecret] = useState(() => generateSecureWebhookSecret());
+  // One secret per org, issued by the server, so a reload rebuilds the same
+  // link the customer may already have launched.
+  const cfnSecretQuery = useQuery({
+    queryKey: ["cfn-webhook-secret", organizationId],
+    queryFn: async () => {
+      const result = await getCloudFormationWebhookSecretAction(organizationId);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.webhookSecret;
+    },
+    enabled: !selfHosted,
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+  const webhookSecret = cfnSecretQuery.data;
   const [sendingDomain, setSendingDomain] = useState("");
 
   const quickCreateUrl = useMemo(
     () =>
-      selfHosted
+      selfHosted || !webhookSecret
         ? null
         : generateQuickCreateUrl(organizationId, webhookSecret, sendingDomain),
     [organizationId, selfHosted, webhookSecret, sendingDomain]
@@ -270,7 +275,7 @@ export function CliDeployConnectStep({
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...data, webhookSecret }),
+          body: JSON.stringify(data),
         }
       );
       if (!response.ok) {
@@ -745,7 +750,7 @@ export function CliDeployConnectStep({
         )}
 
         {selectedMethod === "cloudformation" &&
-          quickCreateUrl !== null &&
+          !selfHosted &&
           (cfnDeployed ? (
             <section
               aria-label="Browser deployment steps"
@@ -880,6 +885,7 @@ export function CliDeployConnectStep({
               */}
               <Button
                 className="ph-no-capture w-full"
+                disabled={!quickCreateUrl}
                 onClick={handleOpenAwsConsole}
                 type="button"
                 variant="outline"
@@ -951,10 +957,21 @@ export function CliDeployConnectStep({
                 </p>
               </div>
 
-              <Button className="w-full" onClick={handleCloudFormationDeploy}>
+              <Button
+                className="w-full"
+                disabled={!quickCreateUrl}
+                loading={cfnSecretQuery.isPending}
+                onClick={handleCloudFormationDeploy}
+              >
                 <ExternalLinkIcon className="mr-2 h-4 w-4" />
                 Deploy with CloudFormation
               </Button>
+              {cfnSecretQuery.isError && (
+                <p className="text-destructive text-sm">
+                  Couldn't prepare the CloudFormation link. Reload the page to
+                  try again.
+                </p>
+              )}
             </section>
           ))}
 
